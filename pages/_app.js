@@ -11,6 +11,7 @@ const client = new ApolloClient({
     credentials: "include"
   }
 });
+
 class MyApp extends App {
   render() {
     const { Component, pageProps } = this.props;
