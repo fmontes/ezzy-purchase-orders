@@ -2,7 +2,16 @@ import { useState } from 'react';
 
 import gql from 'graphql-tag';
 
-import { Badge, Button, Card, SkeletonBodyText, Layout, SkeletonDisplayText } from '@shopify/polaris';
+import {
+  Badge,
+  Button,
+  Card,
+  SkeletonBodyText,
+  Layout,
+  SkeletonDisplayText,
+  DisplayText,
+  TextStyle
+} from '@shopify/polaris';
 import { ResourcePicker } from '@shopify/app-bridge-react';
 
 import { Checkbox, TextField } from '@satel/formik-polaris';
@@ -31,7 +40,7 @@ const InventoryListItem = ({ data, onDelete, index }) => {
       <td style={cellStyle}>
         <TextField placeholder="How many?" name={`inventory.${index}.quantity`} type="number" value={quantity} />
       </td>
-      <td style={cellStyle}>
+      <td align="center" style={cellStyle}>
         <Checkbox name={`inventory.${index}.taxable`} value={taxable} />
       </td>
       <td style={cellStyle}>
@@ -51,7 +60,7 @@ const TableHeader = () => {
         <th style={cellHeaderStyle}>Cost</th>
         <th style={cellHeaderStyle}>Price</th>
         <th style={cellHeaderStyle}>Quanity</th>
-        <th style={cellHeaderStyle}>Taxed?</th>
+        <th style={cellHeaderStyle}>Taxed</th>
         <th style={cellHeaderStyle}>Actions</th>
       </tr>
     </thead>
@@ -94,6 +103,26 @@ function EmptyInventoryList({ children }) {
       <div style={{ textAlign: 'center', marginTop: '2rem' }}>{children}</div>
     </>
   );
+}
+
+const formatter = new Intl.NumberFormat('es-CR', {
+  style: 'currency',
+  currency: 'CRC',
+  minimumFractionDigits: 0
+});
+
+function getTax(data) {
+  return data
+    .filter(item => item.taxable)
+    .reduce((acc, item) => {
+      return acc + item.quantity * item.cost * 0.13;
+    }, 0);
+}
+
+function getSubtotal(data) {
+  return data.reduce((acc, item) => {
+    return acc + item.quantity * item.cost;
+  }, 0);
 }
 
 function InventoryList({ data }) {
@@ -160,6 +189,10 @@ function InventoryList({ data }) {
                   </Button>
                 );
 
+                const tax = getTax(data);
+                const subtotal = getSubtotal(data);
+                const total = tax + subtotal;
+
                 return data.length ? (
                   <table cellSpacing={0} style={{ width: '100%' }}>
                     <TableHeader />
@@ -174,6 +207,33 @@ function InventoryList({ data }) {
                           }}
                         />
                       ))}
+                      <tr>
+                        <td colSpan={3} />
+                        <td style={cellStyle} align="right">
+                          <TextStyle variation="subdued">Tax:</TextStyle>
+                        </td>
+                        <td colSpan={2} style={cellStyle} align="right">
+                          <TextStyle variation="subdued">{formatter.format(tax)}</TextStyle>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} />
+                        <td style={cellStyle} align="right">
+                          <TextStyle variation="subdued">Subtotal:</TextStyle>
+                        </td>
+                        <td colSpan={2} style={cellStyle} align="right">
+                          <TextStyle variation="subdued">{formatter.format(subtotal)}</TextStyle>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} />
+                        <td style={cellStyle} align="right">
+                          <DisplayText size="small">Total:</DisplayText>
+                        </td>
+                        <td colSpan={2} style={cellStyle} align="right">
+                          <DisplayText size="small">{formatter.format(total)}</DisplayText>
+                        </td>
+                      </tr>
                       <tr>
                         <td align="center" colSpan={6} style={{ paddingTop: '2rem' }}>
                           <AddButton />
