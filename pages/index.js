@@ -1,12 +1,19 @@
-import { EmptyState, Layout, Page } from '@shopify/polaris';
-import { ResourcePicker, TitleBar } from '@shopify/app-bridge-react';
-import InventoryList from '../components/InventoryList';
+import { Formik, Form } from 'formik';
+import { Page, Layout, Card, FormLayout, PageActions } from '@shopify/polaris';
+import { TextField } from '@satel/formik-polaris';
+
 import { AppContext } from '../context/index';
+import InventoryList from '../components/InventoryList';
 
-const img = 'https://cdn.shopify.com/s/files/1/0757/9955/files/empty-state.svg';
+function getToday() {
+  const now = new Date();
+  const day = ('0' + now.getDate()).slice(-2);
+  const month = ('0' + (now.getMonth() + 1)).slice(-2);
 
-class Index extends React.Component {
-  state = { open: false, productsSelected: [] };
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+export default class Index extends React.Component {
   render() {
     return (
       <AppContext.Provider
@@ -14,62 +21,56 @@ class Index extends React.Component {
           lang: 'en'
         }}
       >
-        <Page fullWidth>
-          <TitleBar
-            primaryAction={{
-              content: 'Select products',
-              onAction: () => this.setState({ open: true })
-            }}
-          />
-          <ResourcePicker
-            resourceType="Product"
-            showVariants={false}
-            open={this.state.open}
-            onSelection={resources => this.handleSelection(resources)}
-            onCancel={() => this.setState({ open: false })}
-          />
-          {this.state.productsSelected.length ? (
-            <InventoryList products={this.state.productsSelected} onDelete={this.onDelete.bind(this)} />
-          ) : (
-            <EmptyState
-              heading="Create a Purchase Order"
-              action={{
-                content: 'Select products',
-                onAction: () => this.setState({ open: true })
-              }}
-              image={img}
-            >
-              <p>Start adding products to your order</p>
-            </EmptyState>
-          )}
-        </Page>
+        <Formik
+          initialValues={{
+            vendor: '',
+            invoice: '',
+            date: getToday(),
+            inventory: []
+          }}
+          onSubmit={(values, { setSubmitting }) => {
+            setTimeout(() => {
+              alert(JSON.stringify(values, null, 2));
+              setSubmitting(false);
+            }, 400);
+          }}
+          render={({ values, handleSubmit}) => {
+            return (
+              <Form noValidate>
+                <Page title="Create a Purchase" breadcrumbs={[{ content: 'Purchases', url: '/Purchases' }]}>
+                  <Layout>
+                    <Layout.Section>
+                      <Card sectioned title="Purchase Information">
+                        <FormLayout>
+                          <FormLayout.Group>
+                            <TextField required type="text" label="Vendor" name="vendor" />
+                            <TextField required type="text" label="Invoice" name="invoice" />
+                            <TextField required type="date" label="Date" name="date" />
+                          </FormLayout.Group>
+                        </FormLayout>
+                      </Card>
+                      <Card sectioned title="Products">
+                        <InventoryList data={values.inventory} />
+                      </Card>
+                    </Layout.Section>
+                  </Layout>
+                  <PageActions
+                    primaryAction={{
+                      content: 'Save',
+                      onAction: handleSubmit
+                    }}
+                    secondaryActions={[
+                      {
+                        content: 'Cancel'
+                      }
+                    ]}
+                  />
+                </Page>
+              </Form>
+            );
+          }}
+        />
       </AppContext.Provider>
     );
   }
-
-  onDelete(id) {
-    const products = this.state.productsSelected.filter(product => product.id !== id);
-    this.setState({
-      ...this.state,
-      productsSelected: products
-    });
-  }
-
-  handleSelection = ({ selection }) => {
-    const newItems = selection.filter(
-      item => this.state.productsSelected.findIndex(existing => existing.id === item.id) < 0
-    );
-
-    const state = {
-      open: false
-    };
-
-    if (newItems.length) {
-      state.productsSelected = [...this.state.productsSelected, ...newItems];
-    }
-
-    this.setState(state);
-  };
 }
-
-export default Index;

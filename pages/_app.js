@@ -6,7 +6,7 @@ import { Provider } from "@shopify/app-bridge-react";
 import Cookies from "js-cookie";
 import "@shopify/polaris/styles.css";
 
-const client = new ApolloClient({
+export const client = new ApolloClient({
   fetchOptions: {
     credentials: "include"
   }

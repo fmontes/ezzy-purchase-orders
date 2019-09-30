@@ -1,30 +1,38 @@
-import { Card, TextField, Badge, Checkbox, Button, Layout } from '@shopify/polaris';
+import { useState } from 'react';
+
 import gql from 'graphql-tag';
-import { Query } from 'react-apollo';
+
+import { Badge, Button, Card, SkeletonBodyText, Layout, SkeletonDisplayText } from '@shopify/polaris';
+import { ResourcePicker } from '@shopify/app-bridge-react';
+
+import { Checkbox, TextField } from '@satel/formik-polaris';
+import { FieldArray } from 'formik';
 
 import { AppContext } from '../context/index';
+import { client } from '../pages/_app';
 
 const cellStyle = { borderBottom: 'solid 1px #eee', padding: '1rem' };
 const cellHeaderStyle = { ...cellStyle, textAlign: 'left' };
 
-const InventoryListItem = ({ data, onDelete }) => {
-  const [title, cost, quanity, price] = data;
+const InventoryListItem = ({ data, onDelete, index }) => {
+  const { cost, price, quantity, taxable, title, totalInventory } = data;
+
   return (
     <tr>
-      <td style={{ ...cellStyle, width: '40%' }}>
-        {title} <Badge>{quanity}</Badge>
+      <td width="33%" style={cellStyle}>
+        {title} <Badge>{totalInventory}</Badge>
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="Cost" type="currency" value={cost} />
+        <TextField placeholder="Cost" name={`inventory.${index}.cost`} type="currency" value={cost} />
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="Price" type="currency" value={price} />
+        <TextField placeholder="Price" name={`inventory.${index}.price`} type="currency" value={price} />
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="How many?" type="number" />
+        <TextField placeholder="How many?" name={`inventory.${index}.quantity`} type="number" value={quantity} />
       </td>
       <td style={cellStyle}>
-        <Checkbox />
+        <Checkbox name={`inventory.${index}.taxable`} value={taxable} />
       </td>
       <td style={cellStyle}>
         <Button outline size="slim" onClick={onDelete}>
@@ -35,74 +43,159 @@ const InventoryListItem = ({ data, onDelete }) => {
   );
 };
 
-function getInventoryItemsId(products) {
-  return products.reduce((acc, item) => [...acc, ...item.variants.map(variant => variant.inventoryItem.id)], []);
+const TableHeader = () => {
+  return (
+    <thead>
+      <tr>
+        <th style={cellHeaderStyle}>Product</th>
+        <th style={cellHeaderStyle}>Cost</th>
+        <th style={cellHeaderStyle}>Price</th>
+        <th style={cellHeaderStyle}>Quanity</th>
+        <th style={cellHeaderStyle}>Taxed?</th>
+        <th style={cellHeaderStyle}>Actions</th>
+      </tr>
+    </thead>
+  );
+};
+
+const getInventoryItemsId = products => {
+  return products.reduce((acc, item) => [...acc, ...item.variants.map(({ inventoryItem }) => inventoryItem.id)], []);
+};
+
+async function getCosts(ids) {
+  return client
+    .query({
+      query: GET_PRODUCT_COST_BY_ID,
+      variables: {
+        ids
+      }
+    })
+    .then(({ data: { nodes } }) => nodes.map(({ unitCost }) => unitCost.amount));
 }
 
-function InventoryList({ products, onDelete }) {
-  const items = getInventoryItemsId(products);
+function EmptyInventoryList({ children }) {
+  const EmtpyBox = () => (
+    <Layout.Section oneThird>
+      <SkeletonDisplayText size="small" />
+      <br />
+      <SkeletonBodyText lines={1} />
+    </Layout.Section>
+  );
+
+  return (
+    <>
+      <Card sectioned>
+        <Layout>
+          <EmtpyBox />
+          <EmtpyBox />
+          <EmtpyBox />
+        </Layout>
+      </Card>
+      <div style={{ textAlign: 'center', marginTop: '2rem' }}>{children}</div>
+    </>
+  );
+}
+
+function InventoryList({ data }) {
+  const [resourcePicker, setResourcePicker] = useState({
+    open: false,
+    pushInventoryField: () => {}
+  });
+
+  const cancelResourcePicker = () => {
+    setResourcePicker({
+      open: false,
+      pushInventoryField: () => {}
+    });
+  };
+
+  const removeAlreadyAddedProducts = selection => {
+    const dataIds = data.map(({ id }) => id);
+    return data.length ? selection.filter(({ id }) => !dataIds.includes(id)) : selection;
+  };
+
   return (
     <AppContext.Consumer>
       {({ lang }) => {
-        console.log(lang);
         return (
-          <Query query={GET_INVENTORY_BY_ID} variables={{ ids: items }}>
-            {({ data, loading, error }) => {
-              if (loading) return <div>Loading…</div>;
-              if (error) return <div>{error.message}</div>;
-              const rows = data.nodes.map(item => [
-                item.variant.product.title,
-                item.unitCost.amount,
-                item.variant.inventoryQuantity,
-                item.variant.price
-              ]);
-              return (
-                <Layout>
-                  <Layout.Section>
-                    <Card
-                      sectioned
-                      title="Add Purchase"
-                      secondaryFooterActions={[{ content: 'Cancel' }]}
-                      primaryFooterAction={{ content: 'Process' }}
-                    >
-                      <table cellSpacing={0} style={{ width: '100%' }}>
-                        <thead>
-                          <tr>
-                            <th style={cellHeaderStyle}>Product</th>
-                            <th style={cellHeaderStyle}>Cost</th>
-                            <th style={cellHeaderStyle}>Price</th>
-                            <th style={cellHeaderStyle}>Quanity</th>
-                            <th style={cellHeaderStyle}>Taxed?</th>
-                            <th style={cellHeaderStyle}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, i) => (
-                            <InventoryListItem
-                              data={row}
-                              key={i}
-                              onDelete={() => {
-                                onDelete(data.nodes[i].variant.product.id);
-                              }}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
-                    </Card>
-                  </Layout.Section>
-                </Layout>
-              );
-            }}
-          </Query>
+          <>
+            <ResourcePicker
+              resourceType="Product"
+              showVariants={true}
+              open={resourcePicker.open}
+              onSelection={async ({ selection }) => {
+                const costs = await getCosts(getInventoryItemsId(selection));
+                const filtered = removeAlreadyAddedProducts(selection);
+
+                filtered.forEach(({ id, title, totalInventory, variants: [{ price, taxable }] }, index) => {
+                  resourcePicker.pushInventoryField({
+                    totalInventory,
+                    title,
+                    taxable,
+                    quantity: 6,
+                    price,
+                    id,
+                    cost: costs[index]
+                  });
+                });
+                cancelResourcePicker();
+              }}
+              onCancel={cancelResourcePicker}
+            />
+
+            <FieldArray
+              name="inventory"
+              render={arrayHelpers => {
+                const AddButton = () => (
+                  <Button
+                    outline
+                    onClick={() => {
+                      setResourcePicker({
+                        open: true,
+                        pushInventoryField: arrayHelpers.push
+                      });
+                    }}
+                  >
+                    Add
+                  </Button>
+                );
+
+                return data.length ? (
+                  <table cellSpacing={0} style={{ width: '100%' }}>
+                    <TableHeader />
+                    <tbody>
+                      {data.map((item, i) => (
+                        <InventoryListItem
+                          data={item}
+                          key={i}
+                          index={i}
+                          onDelete={() => {
+                            arrayHelpers.remove(i);
+                          }}
+                        />
+                      ))}
+                      <tr>
+                        <td align="center" colSpan={6} style={{ paddingTop: '2rem' }}>
+                          <AddButton />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <EmptyInventoryList>
+                    <AddButton />
+                  </EmptyInventoryList>
+                );
+              }}
+            />
+          </>
         );
       }}
     </AppContext.Consumer>
   );
 }
 
-export default InventoryList;
-
-const GET_INVENTORY_BY_ID = gql`
+const GET_PRODUCT_COST_BY_ID = gql`
   query getInventoryByIds($ids: [ID!]!) {
     nodes(ids: $ids) {
       ... on InventoryItem {
@@ -110,17 +203,9 @@ const GET_INVENTORY_BY_ID = gql`
           amount
           currencyCode
         }
-        id
-        variant {
-          product {
-            title
-            vendor
-            id
-          }
-          inventoryQuantity
-          price
-        }
       }
     }
   }
 `;
+
+export default InventoryList;
