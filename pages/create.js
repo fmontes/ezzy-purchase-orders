@@ -33,17 +33,6 @@ const VendorsSelect = () => (
   </Query>
 );
 
-const TestAws = () => (
-  <Query query={TEST_AWS} context={{ name: 'aws' }}>
-    {({ data, loading, error }) => {
-      if (loading) return <h3>Loading</h3>;
-      if (error) return <div>{error.message}</div>;
-
-      return <h3>Hola {data.listShopifyEzzyPurchaseOrders.items[0].id}</h3>;
-    }}
-  </Query>
-);
-
 export default class Index extends React.Component {
   render() {
     return (
@@ -74,7 +63,6 @@ export default class Index extends React.Component {
                       <Card sectioned title="Purchase Information">
                         <FormLayout>
                           <FormLayout.Group>
-                            <TestAws />
                             <VendorsSelect />
                             <TextField type="text" label="Invoice" name="invoice" />
                             <TextField type="date" label="Date" name="date" />
@@ -114,15 +102,6 @@ const GET_VENDORS = gql`
         edges {
           node
         }
-      }
-    }
-  }
-`;
-const TEST_AWS = gql`
-  query list {
-    listShopifyEzzyPurchaseOrders(limit: 5) {
-      items {
-        id
       }
     }
   }
