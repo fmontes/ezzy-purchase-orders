@@ -1,128 +1,115 @@
+import Router from 'next/router';
 import gql from 'graphql-tag';
-import { Query } from 'react-apollo';
-
+import { DataTable, Page, Layout, Card, FormLayout, Button } from '@shopify/polaris';
 import { Formik, Form } from 'formik';
-import { Page, Layout, Card, FormLayout, PageActions } from '@shopify/polaris';
-import { TextField, Select } from '@satel/formik-polaris';
+import { Query } from 'react-apollo';
+import { TextField } from '@satel/formik-polaris';
 
-import { AppContext } from '../context/index';
-import InventoryList from '../components/InventoryList';
+import { getToday } from '../utils/date';
+import { currencify } from '../utils/currency';
 
-function getToday() {
-  const now = new Date();
-  const day = ('0' + now.getDate()).slice(-2);
-  const month = ('0' + (now.getMonth() + 1)).slice(-2);
+import VendorsSelect from '../components/VendorSelect';
 
-  return `${now.getFullYear()}-${month}-${day}`;
-}
+export default function purchaseList() {
+  return (
+    <Query query={AWS_GET_PURCHASES} context={{ name: 'aws' }}>
+      {({ data, loading, error }) => {
+        if (loading) return <h3>Loading</h3>;
+        if (error) return <div>{error.message}</div>;
 
-const VendorsSelect = () => (
-  <Query query={GET_VENDORS}>
-    {({ data, loading, error }) => {
-      if (loading) return <Select label="Vendor" name="vendor" disabled={true} />;
-      if (error) return <div>{error.message}</div>;
-      let options = data.shop.productVendors.edges.map(({ node }) => {
-        return {
-          label: node,
-          value: node
-        };
-      });
+        const rows = data.listShopifyEzzyPurchaseOrders.items.map(
+          ({ invoiceNumber, vendor, author, payment }) => [
+            invoiceNumber,
+            vendor,
+            currencify(payment.total),
+            author
+          ]
+        );
 
-      return <Select label="Vendor" placeholder="Select one" name="vendor" options={options} />;
-    }}
-  </Query>
-);
-
-const TestAws = () => (
-  <Query query={TEST_AWS} context={{ name: 'aws' }}>
-    {({ data, loading, error }) => {
-      if (loading) return <h3>Loading</h3>;
-      if (error) return <div>{error.message}</div>;
-
-      return <h3>Hola {data.listShopifyEzzyPurchaseOrders.items[0].id}</h3>;
-    }}
-  </Query>
-);
-
-export default class Index extends React.Component {
-  render() {
-    return (
-      <AppContext.Provider
-        value={{
-          lang: 'en'
-        }}
-      >
-        <Formik
-          initialValues={{
-            vendor: '',
-            invoice: '',
-            date: getToday(),
-            inventory: []
-          }}
-          onSubmit={(values, { setSubmitting }) => {
-            setTimeout(() => {
-              alert(JSON.stringify(values, null, 2));
-              setSubmitting(false);
-            }, 400);
-          }}
-          render={({ values, handleSubmit }) => {
-            return (
-              <Form noValidate>
-                <Page title="Create a Purchase" breadcrumbs={[{ content: 'Purchases', url: '/Purchases' }]}>
-                  <Layout>
-                    <Layout.Section>
-                      <Card sectioned title="Purchase Information">
-                        <FormLayout>
-                          <FormLayout.Group>
-                            <TestAws />
-                            <VendorsSelect />
+        return (
+          <Page
+            title="Purchases"
+            primaryAction={{
+              content: 'Create',
+              onAction: () => {
+                Router.push({
+                  pathname: '/create'
+                });
+              }
+            }}
+          >
+            <Layout>
+              <Layout.Section secondary>
+                <Card sectioned>
+                  <Formik
+                    initialValues={{
+                      vendor: '',
+                      invoice: '',
+                      date: getToday()
+                    }}
+                    onSubmit={(values, { setSubmitting }) => {
+                      setTimeout(() => {
+                        alert(JSON.stringify(values, null, 2));
+                        setSubmitting(false);
+                      }, 400);
+                    }}
+                    render={({ values, handleSubmit }) => {
+                      return (
+                        <Form>
+                          <FormLayout>
+                            <VendorsSelect name="vendor" placeholder="Select one" label="" />
                             <TextField type="text" label="Invoice" name="invoice" />
                             <TextField type="date" label="Date" name="date" />
-                          </FormLayout.Group>
-                        </FormLayout>
-                      </Card>
-                      <Card sectioned title="Products">
-                        <InventoryList data={values.inventory} />
-                      </Card>
-                    </Layout.Section>
-                  </Layout>
-                  <PageActions
-                    primaryAction={{
-                      content: 'Save',
-                      onAction: handleSubmit
+                            <Button submit>Filter</Button>
+                          </FormLayout>
+                        </Form>
+                      );
                     }}
-                    secondaryActions={[
-                      {
-                        content: 'Cancel'
-                      }
-                    ]}
                   />
-                </Page>
-              </Form>
-            );
-          }}
-        />
-      </AppContext.Provider>
-    );
-  }
+                </Card>
+              </Layout.Section>
+              <Layout.Section>
+                <Card sectioned>
+                  <DataTable
+                    columnContentTypes={['text', 'text', 'numeric', 'text']}
+                    rows={rows}
+                    headings={['Invoice Number', 'Vendor', 'Total', 'Author']}
+                  />
+                </Card>
+              </Layout.Section>
+            </Layout>
+          </Page>
+        );
+      }}
+    </Query>
+  );
 }
 
-const GET_VENDORS = gql`
-  query GetVendors {
-    shop {
-      productVendors(first: 100) {
-        edges {
-          node
-        }
-      }
-    }
-  }
-`;
-const TEST_AWS = gql`
+const AWS_GET_PURCHASES = gql`
   query list {
     listShopifyEzzyPurchaseOrders(limit: 5) {
       items {
         id
+        vendor
+        invoiceNumber
+        date
+        items {
+          title
+          price
+          cost
+          totalInventory
+          quantity
+          id
+        }
+        author
+        payment {
+          type
+          notes
+          subtotal
+          tax
+          total
+          discount
+        }
       }
     }
   }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import gql from 'graphql-tag';
 
+
 import {
   Badge,
   Button,
@@ -19,6 +20,8 @@ import { FieldArray } from 'formik';
 
 import { AppContext } from '../context/index';
 import { client } from '../pages/_app';
+import { currencify } from '../utils/currency';
+import { getTotals } from '../utils/checkout';
 
 const cellStyle = { borderBottom: 'solid 1px #eee', padding: '1rem' };
 const cellHeaderStyle = { ...cellStyle, textAlign: 'left' };
@@ -32,16 +35,16 @@ const InventoryListItem = ({ data, onDelete, index }) => {
         {title} <Badge>{totalInventory}</Badge>
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="Cost" name={`inventory.${index}.cost`} type="currency" value={cost} />
+        <TextField placeholder="Cost" name={`items.${index}.cost`} type="currency" value={cost} />
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="Price" name={`inventory.${index}.price`} type="currency" value={price} />
+        <TextField placeholder="Price" name={`items.${index}.price`} type="currency" value={price} />
       </td>
       <td style={cellStyle}>
-        <TextField placeholder="How many?" name={`inventory.${index}.quantity`} type="number" value={quantity} />
+        <TextField placeholder="How many?" name={`items.${index}.quantity`} type="number" value={quantity} />
       </td>
       <td align="center" style={cellStyle}>
-        <Checkbox name={`inventory.${index}.taxable`} value={taxable} />
+        <Checkbox name={`items.${index}.taxable`} value={taxable} />
       </td>
       <td style={cellStyle}>
         <Button outline size="slim" onClick={onDelete}>
@@ -105,27 +108,9 @@ function EmptyInventoryList({ children }) {
   );
 }
 
-const formatter = new Intl.NumberFormat('es-CR', {
-  style: 'currency',
-  currency: 'CRC',
-  minimumFractionDigits: 0
-});
-
-function getTax(data) {
-  return data
-    .filter(item => item.taxable)
-    .reduce((acc, item) => {
-      return acc + item.quantity * item.cost * 0.13;
-    }, 0);
-}
-
-function getSubtotal(data) {
-  return data.reduce((acc, item) => {
-    return acc + item.quantity * item.cost;
-  }, 0);
-}
-
 function InventoryList({ data }) {
+  const { subtotal, tax, total } = getTotals(data);
+
   const [resourcePicker, setResourcePicker] = useState({
     open: false,
     pushInventoryField: () => {}
@@ -158,13 +143,13 @@ function InventoryList({ data }) {
 
                 filtered.forEach(({ id, title, totalInventory, variants: [{ price, taxable }] }, index) => {
                   resourcePicker.pushInventoryField({
-                    totalInventory,
-                    title,
-                    taxable,
-                    quantity: 6,
-                    price,
+                    cost: costs[index],
                     id,
-                    cost: costs[index]
+                    price,
+                    quantity: 6,
+                    taxable,
+                    title,
+                    totalInventory
                   });
                 });
                 cancelResourcePicker();
@@ -173,7 +158,7 @@ function InventoryList({ data }) {
             />
 
             <FieldArray
-              name="inventory"
+              name="items"
               render={arrayHelpers => {
                 const AddButton = () => (
                   <Button
@@ -188,10 +173,6 @@ function InventoryList({ data }) {
                     Add
                   </Button>
                 );
-
-                const tax = getTax(data);
-                const subtotal = getSubtotal(data);
-                const total = tax + subtotal;
 
                 return data.length ? (
                   <table cellSpacing={0} style={{ width: '100%' }}>
@@ -213,7 +194,7 @@ function InventoryList({ data }) {
                           <TextStyle variation="subdued">Tax:</TextStyle>
                         </td>
                         <td colSpan={2} style={cellStyle} align="right">
-                          <TextStyle variation="subdued">{formatter.format(tax)}</TextStyle>
+                          <TextStyle variation="subdued">{currencify(tax)}</TextStyle>
                         </td>
                       </tr>
                       <tr>
@@ -222,7 +203,7 @@ function InventoryList({ data }) {
                           <TextStyle variation="subdued">Subtotal:</TextStyle>
                         </td>
                         <td colSpan={2} style={cellStyle} align="right">
-                          <TextStyle variation="subdued">{formatter.format(subtotal)}</TextStyle>
+                          <TextStyle variation="subdued">{currencify(subtotal)}</TextStyle>
                         </td>
                       </tr>
                       <tr>
@@ -231,7 +212,7 @@ function InventoryList({ data }) {
                           <DisplayText size="small">Total:</DisplayText>
                         </td>
                         <td colSpan={2} style={cellStyle} align="right">
-                          <DisplayText size="small">{formatter.format(total)}</DisplayText>
+                          <DisplayText size="small">{currencify(total)}</DisplayText>
                         </td>
                       </tr>
                       <tr>
